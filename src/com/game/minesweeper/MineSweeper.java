@@ -6,6 +6,7 @@
 package com.game.minesweeper;
 
 import java.util.HashSet;
+import java.util.InputMismatchException;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
@@ -17,7 +18,7 @@ import java.util.Set;
 public class MineSweeper {
     private static final int GRID_CELL_ROWS = 15;
     private static final int GRID_CELL_COLS = 15;
-    private static final int NUM_OF_MINES = 35;
+    private static final float NUM_OF_MINES_PERCENT = 0.2f;
     private static int MAX_REVEAL_SQUARES = 7;
     private static int POINTS_PER_CORRECT_PATH = 50;
     private int gameGrid[][];
@@ -25,33 +26,46 @@ public class MineSweeper {
     private int visitedGrid[][];
     private int points;
     private int revealSquareCount;
+    private int numGridRows;
+    private int numGridCols;
+    
     public MineSweeper() {
-        this.gameGrid = new int[GRID_CELL_ROWS][GRID_CELL_COLS];
-        this.mineGrid = new int[GRID_CELL_ROWS][GRID_CELL_COLS];
-        this.points = 0;
-        this.visitedGrid = new int[GRID_CELL_ROWS][GRID_CELL_COLS];
-        this.revealSquareCount = 0;
-        
+        this(GRID_CELL_ROWS, GRID_CELL_COLS);
     }
-    private void setup() {
+    
+    public MineSweeper(int gridRows, int gridCols) {
+        this.setupGame(gridRows, gridCols);
+    }
+    public void setupGame(int gridRows, int gridCols) {
+        this.numGridRows = gridRows;
+        this.numGridCols = gridCols;
+        this.gameGrid = new int[gridRows][gridCols];
+        this.mineGrid = new int[gridRows][gridCols];
+        this.points = 0;
+        this.visitedGrid = new int[gridRows][gridCols];
+        this.revealSquareCount = 0;
+        this.setupMines();
+    }
+    public void setupMines() {
         /**
-         * Randomly set some squares to hold mines subject to max of 
-         * NUM_OF_MINES
+         * Randomly set some squares to hold mines subject to max number of 
+         * mines
          */ 
         Random rowRandomizer = new Random();
         Random colRandomizer = new Random();
-        
         int randrow, randcol;
-        for(int k = 0; k < NUM_OF_MINES;) {
-            randrow = rowRandomizer.nextInt(GRID_CELL_ROWS);
-            randcol = colRandomizer.nextInt(GRID_CELL_COLS);
+        int numOfMines 
+            = (int) (NUM_OF_MINES_PERCENT*this.numGridRows*this.numGridCols);
+        
+        for(int k = 0; k < numOfMines;) {
+            randrow = rowRandomizer.nextInt(this.numGridRows);
+            randcol = colRandomizer.nextInt(this.numGridCols);
             if (this.mineGrid[randrow][randcol] == 1) {
                 continue;
             }
             this.mineGrid[randrow][randcol] = 1;
             k++;
         }
-        
     }
     public void printGameGrid() {
         System.out.println();
@@ -65,13 +79,13 @@ public class MineSweeper {
     
     private void _printGrid(int grid[][], boolean showMines) {
         System.out.printf("    |");           
-        print(" %2d  |", GRID_CELL_COLS, true);
+        print(" %2d  |", this.numGridCols, true);
 
-        for(int i = 0; i < GRID_CELL_ROWS; i++) {
+        for(int i = 0; i < this.numGridRows; i++) {
            System.out.printf("    |");
-           print("-----|", GRID_CELL_COLS, false);
+           print("-----|", this.numGridCols, false);
            System.out.printf("%2d->|", i + 1);
-           for(int j = 0; j < GRID_CELL_COLS; j++) {
+           for(int j = 0; j < this.numGridCols; j++) {
                if (showMines && this.mineGrid[i][j] == 1) {
                    System.out.printf(" %2s  |", "M");
                    continue;
@@ -88,7 +102,7 @@ public class MineSweeper {
            System.out.println();
        }
        System.out.printf("    |");
-       print("-----|", GRID_CELL_COLS, false);
+       print("-----|", this.numGridCols, false);
        
     }
     
@@ -102,22 +116,39 @@ public class MineSweeper {
         while (true) {
             validInput = false;
             while (!validInput) {
-                System.out.printf("Enter a row # (-1 -> Exit): ");
-                row = inScan.nextInt();
-                if (row == -1) {
+                try {
+                    System.out.printf("Enter a row # (-1 = Exit): ");
+                    row = inScan.nextInt();
+                    if (row == -1) {
+                        break gameOn;
+                    } else if (row <= 0 || row > this.numGridRows) {
+                        throw new InputMismatchException();
+                    }
+                    System.out.printf("Enter a col # (-1 = Exit): ");
+                    col = inScan.nextInt();
+                    if (col == -1) {
+                        break gameOn;
+                    } else if (col <= 0 || col > this.numGridCols) {
+                        throw new InputMismatchException();
+                    }
+                    row--;
+                    col--;
+                    if (this.isValidElement(this.gameGrid, row, col) && 
+                        this.gameGrid[row][col] == 0
+                    ) {
+                        validInput = true;
+                    }
+                } catch(InputMismatchException mex) {
+                    /**
+                     * If the input was a string instead of row or col #, then
+                     * try to read it off as a string and ask user input again
+                     */
+                    if (inScan != null && inScan.hasNextLine()) {
+                        inScan.nextLine();
+                    }
+                    validInput = false;
+                } catch(Exception ex) {
                     break gameOn;
-                }
-                System.out.printf("Enter a col # (-1 -> Exit): ");
-                col = inScan.nextInt();
-                if (col == -1) {
-                    break gameOn;
-                }
-                row--;
-                col--;
-                if (this.isValidElement(this.gameGrid, row, col) && 
-                    this.gameGrid[row][col] == 0
-                ) {
-                    validInput = true;
                 }
             }
 
@@ -145,10 +176,10 @@ public class MineSweeper {
     }
     private void revealAdjacentMineCount(int row, int col) {
         int counter = 0;
-        if ( row < 0 || row > GRID_CELL_ROWS - 1) {
+        if ( row < 0 || row > this.numGridRows - 1) {
             return;
         }
-        if (col < 0 || col > GRID_CELL_COLS - 1) {
+        if (col < 0 || col > this.numGridCols - 1) {
             return;
         }
         if (this.gameGrid[row][col] > 0) {
@@ -255,8 +286,7 @@ public class MineSweeper {
         System.out.println();
     }
     public static void main(String args[]) {
-        MineSweeper mine = new MineSweeper();
-        mine.setup();
+        MineSweeper mine = new MineSweeper(10, 10);
         mine.playGame();
     }
 }
